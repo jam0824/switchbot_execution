@@ -18,6 +18,7 @@ class Logger:
 
     def add_log(self, data):
         self.list_log.append(data)
+        # logが一定量たまったらファイルに平均化して追記
         if len(self.list_log) >= self.log_max:
             average = self.calc_amplitude_averate(self.list_log)
             max_data = int(max(self.list_log))

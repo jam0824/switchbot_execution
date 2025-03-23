@@ -9,8 +9,8 @@ CHUNK = 1024               # 1回あたりのフレーム数
 FORMAT = pyaudio.paInt16   # 音声フォーマット（16bit整数）
 CHANNELS = 1               # モノラル
 RATE = 44100               # サンプリングレート（Hz）
-THRESHOLD = 600           # 音量の閾値（調整が必要な場合があります）
-WAIT_TIME = 1000            # 次の実行までの待ち時間
+THRESHOLD = 800           # 音量の閾値（調整が必要な場合があります）
+WAIT_TIME = 10000            # 次の実行までの待ち時間(1000=23秒)
 next_exec_time = WAIT_TIME
 LOG_TIMING = 100
 OUTPUT_FILE_NAME = "output.csv"
