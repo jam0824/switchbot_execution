@@ -1,60 +1,19 @@
-import pyaudio
-import numpy as np
-import time
-import switchbot
-import logger
+import sys
+import mic
 
-# パラメータ設定
-CHUNK = 1024               # 1回あたりのフレーム数
-FORMAT = pyaudio.paInt16   # 音声フォーマット（16bit整数）
-CHANNELS = 1               # モノラル
-RATE = 44100               # サンプリングレート（Hz）
-THRESHOLD = 800           # 音量の閾値（調整が必要な場合があります）
-WAIT_TIME = 10000            # 次の実行までの待ち時間(1000=23秒)
-next_exec_time = WAIT_TIME
-LOG_TIMING = 100
-OUTPUT_FILE_NAME = "output.csv"
+def usage():
+    print("Usage: python3 mic_test.py [single|term]")
 
-# PyAudioオブジェクト生成
-p = pyaudio.PyAudio()
-log = logger.Logger(LOG_TIMING, OUTPUT_FILE_NAME)
-bot = switchbot.SwitchBot()
+if len(sys.argv) != 2:
+    usage()
+    sys.exit(1)
 
-# デフォルトの入力デバイス情報を取得して表示
-default_device_info = p.get_default_input_device_info()
-print("使用中のマイク:", default_device_info.get('name', '不明'))
+m = mic.Mic()
+arg = sys.argv[1].lower()
 
-# マイク入力ストリームをオープン（デフォルトのマイクが使用されます）
-stream = p.open(format=FORMAT,
-                channels=CHANNELS,
-                rate=RATE,
-                input=True,
-                frames_per_buffer=CHUNK)
-
-print("マイク入力を監視中...（Ctrl+Cで終了）")
-try:
-    while True:
-        # マイクからデータ読み込み
-        data = stream.read(CHUNK, exception_on_overflow=False)
-        # numpy配列に変換
-        audio_data = np.frombuffer(data, dtype=np.int16)
-        # 平均絶対値を計算（単純な音量評価）
-        amplitude = np.abs(audio_data).mean()
-        str_log = log.add_log(amplitude)
-        if str_log != "":
-            print(str_log.rstrip('\n'))
-        if(next_exec_time > 0):
-            next_exec_time -= 1
-            if(next_exec_time == 0):
-                print("READY")
-        if amplitude > THRESHOLD and next_exec_time == 0:
-            print("**************************************************OK")
-            bot.exec_scene()
-            next_exec_time = WAIT_TIME
-except KeyboardInterrupt:
-    print("終了します...")
-finally:
-    # ストリームとPyAudioを終了
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
+if arg == "single":
+    m.single_trigger()
+elif arg == "term":
+    m.term_trigger()
+else:
+    usage()
