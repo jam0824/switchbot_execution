@@ -1,2 +1,4 @@
 .env
 api_test.py
+*.csv
+__pycache__

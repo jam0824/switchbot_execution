@@ -2,6 +2,7 @@ import pyaudio
 import numpy as np
 import time
 import switchbot
+import logger
 
 # パラメータ設定
 CHUNK = 1024               # 1回あたりのフレーム数
@@ -11,9 +12,12 @@ RATE = 44100               # サンプリングレート（Hz）
 THRESHOLD = 600           # 音量の閾値（調整が必要な場合があります）
 WAIT_TIME = 1000            # 次の実行までの待ち時間
 next_exec_time = WAIT_TIME
+LOG_TIMING = 100
+OUTPUT_FILE_NAME = "output.csv"
 
 # PyAudioオブジェクト生成
 p = pyaudio.PyAudio()
+log = logger.Logger(LOG_TIMING, OUTPUT_FILE_NAME)
 
 # デフォルトの入力デバイス情報を取得して表示
 default_device_info = p.get_default_input_device_info()
@@ -35,7 +39,7 @@ try:
         audio_data = np.frombuffer(data, dtype=np.int16)
         # 平均絶対値を計算（単純な音量評価）
         amplitude = np.abs(audio_data).mean()
-        # 閾値を超えたら「OK」と出力し、5秒待機
+        log.add_log(amplitude)
         print(amplitude)
         print(next_exec_time)
         if(next_exec_time > 0):
