@@ -18,6 +18,7 @@ OUTPUT_FILE_NAME = "output.csv"
 # PyAudioオブジェクト生成
 p = pyaudio.PyAudio()
 log = logger.Logger(LOG_TIMING, OUTPUT_FILE_NAME)
+bot = switchbot.SwitchBot()
 
 # デフォルトの入力デバイス情報を取得して表示
 default_device_info = p.get_default_input_device_info()
@@ -39,14 +40,15 @@ try:
         audio_data = np.frombuffer(data, dtype=np.int16)
         # 平均絶対値を計算（単純な音量評価）
         amplitude = np.abs(audio_data).mean()
-        log.add_log(amplitude)
-        print(amplitude)
-        print(next_exec_time)
+        str_log = log.add_log(amplitude)
+        if str_log != "":
+            print(str_log.rstrip('\n'))
         if(next_exec_time > 0):
             next_exec_time -= 1
+            if(next_exec_time == 0):
+                print("READY")
         if amplitude > THRESHOLD and next_exec_time == 0:
             print("**************************************************OK")
-            bot = switchbot.SwitchBot()
             bot.exec_scene()
             next_exec_time = WAIT_TIME
 except KeyboardInterrupt:

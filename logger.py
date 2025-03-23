@@ -17,6 +17,7 @@ class Logger:
         return int(average)
 
     def add_log(self, data):
+        log = ""
         self.list_log.append(data)
         # logが一定量たまったらファイルに平均化して追記
         if len(self.list_log) >= self.log_max:
@@ -27,6 +28,7 @@ class Logger:
             log = str(formatted_time) + ',' + str(average) + ',' + str(max_data) + '\n'
             self.append_string_to_file(log, self.file_name)
             self.list_log.clear()
+        return log
 
 
     def append_string_to_file(self, text, file_name):
