@@ -2,6 +2,7 @@ import pyaudio
 import numpy as np
 import switchbot
 import logger
+import wave
 
 class Mic:
     # パラメータ設定
@@ -9,12 +10,14 @@ class Mic:
     FORMAT = pyaudio.paInt16   # 音声フォーマット（16bit整数）
     CHANNELS = 1               # モノラル
     RATE = 44100               # サンプリングレート（Hz）
-    THRESHOLD = 500           # 音量の閾値（調整が必要な場合があります）
+    
+    THRESHOLD = 300           # 音量の閾値（調整が必要な場合があります）
     WAIT_TIME = 10000            # 次の実行までの待ち時間(1000=23秒)
     next_exec_time = WAIT_TIME
-    LOG_TIMING = 100
-    TERM_COUNT = 2
-    OUTPUT_FILE_NAME = "output.csv"
+    LOG_TIMING = 100            # logをどれくらい貯めたら平均と最大を出すか
+    TERM_COUNT = 2              # term_triggerで、thresholdを何回超えたらtriggerするか
+    OUTPUT_FILE_NAME = "output.csv" # logの出力ファイル
+    WAV_FILE = "14000Hz_sine.wav"        # 再生するwavファイルの名前
 
     # PyAudioオブジェクト生成
     p = pyaudio.PyAudio()
@@ -72,6 +75,29 @@ class Mic:
         self.stream.close()
         self.p.terminate()
 
+    def play_wav(self, filename=None):
+        """指定したwavファイルを単発再生する"""
+        if filename is None:
+            filename = self.WAV_FILE
+        try:
+            wf = wave.open(filename, 'rb')
+        except FileNotFoundError:
+            print(f"WAVファイル {filename} が見つかりません。")
+            return
+        # 出力用ストリームの作成
+        output_stream = self.p.open(
+            format=self.p.get_format_from_width(wf.getsampwidth()),
+            channels=wf.getnchannels(),
+            rate=wf.getframerate(),
+            output=True)
+        data = wf.readframes(self.CHUNK)
+        while data:
+            output_stream.write(data)
+            data = wf.readframes(self.CHUNK)
+        output_stream.stop_stream()
+        output_stream.close()
+        wf.close()
+
 
     def single_trigger(self):
         next_exec_time = self.WAIT_TIME
@@ -87,6 +113,7 @@ class Mic:
 
                 if amplitude > self.THRESHOLD and next_exec_time == 0:
                     print("**************************************************OK")
+                    self.play_wav()
                     self.bot.exec_scene()
                     next_exec_time = self.WAIT_TIME
         except KeyboardInterrupt:
@@ -110,7 +137,7 @@ class Mic:
 
                 list_term_log.append(amplitude)
 
-                #listが一定数たまったら実行
+                #list_term_logが一定数たまったら実行
                 if len(list_term_log) >= self.LOG_TIMING:
                     max_amp = int(max(list_term_log))
                     # max_ampがthresholdを超えたらlist_over_thresholdにためる
@@ -123,6 +150,7 @@ class Mic:
                     #連続でmaxがthresholdを超えるかつReadyになっていたら実行
                     if len(list_over_threshold) >= self.TERM_COUNT and next_exec_time == 0:
                         print("**************************************************OK")
+                        self.play_wav()
                         self.bot.exec_scene()
                         next_exec_time = self.WAIT_TIME
                     list_term_log.clear()
