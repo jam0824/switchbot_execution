@@ -113,9 +113,9 @@ class Mic:
 
                 if amplitude > self.THRESHOLD and next_exec_time == 0:
                     print("**************************************************OK")
-                    self.play_wav()
                     self.bot.exec_scene()
                     next_exec_time = self.WAIT_TIME
+                    self.play_wav()
         except KeyboardInterrupt:
             print("終了します...")
         finally:
@@ -150,9 +150,9 @@ class Mic:
                     #連続でmaxがthresholdを超えるかつReadyになっていたら実行
                     if len(list_over_threshold) >= self.TERM_COUNT and next_exec_time == 0:
                         print("**************************************************OK")
-                        self.play_wav()
                         self.bot.exec_scene()
                         next_exec_time = self.WAIT_TIME
+                        self.play_wav()
                     list_term_log.clear()
 
         except KeyboardInterrupt:
