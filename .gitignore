@@ -2,3 +2,6 @@
 api_test.py
 *.csv
 __pycache__
+.pytest_cache
+.venv
+
