@@ -3,158 +3,165 @@ import numpy as np
 import switchbot
 import logger
 import wave
+import config  # config.pyからパラメーターを読み込み
 
 class Mic:
-    # パラメータ設定
-    CHUNK = 1024               # 1回あたりのフレーム数
-    FORMAT = pyaudio.paInt16   # 音声フォーマット（16bit整数）
-    CHANNELS = 1               # モノラル
-    RATE = 44100               # サンプリングレート（Hz）
-    
-    THRESHOLD = 300           # 音量の閾値（調整が必要な場合があります）
-    WAIT_TIME = 10000            # 次の実行までの待ち時間(1000=23秒)
-    next_exec_time = WAIT_TIME
-    LOG_TIMING = 100            # logをどれくらい貯めたら平均と最大を出すか
-    TERM_COUNT = 2              # term_triggerで、thresholdを何回超えたらtriggerするか
-    OUTPUT_FILE_NAME = "output.csv" # logの出力ファイル
-    WAV_FILE = "14000Hz_sine.wav"        # 再生するwavファイルの名前
+    def __init__(
+        self,
+        audio_interface=None,
+        logger_instance=None,
+        bot_instance=None
+    ):
+        # config.pyからパラメーターをインポート
+        self.chunk = config.CHUNK
+        self.format = config.FORMAT
+        self.channels = config.CHANNELS
+        self.rate = config.RATE
+        self.threshold = config.THRESHOLD
+        self.wait_time = config.WAIT_TIME
+        self.log_timing = config.LOG_TIMING
+        self.term_count = config.TERM_COUNT
+        self.output_file_name = config.OUTPUT_FILE_NAME
+        self.wav_file = config.WAV_FILE
 
-    # PyAudioオブジェクト生成
-    p = pyaudio.PyAudio()
-    log = logger.Logger(LOG_TIMING, OUTPUT_FILE_NAME)
-    bot = switchbot.SwitchBot()
+        # 依存性注入（引数で渡されたオブジェクトがなければデフォルトを生成）
+        self.audio_interface = audio_interface if audio_interface is not None else pyaudio.PyAudio()
+        self.logger = logger_instance if logger_instance is not None else logger.Logger(self.log_timing, self.output_file_name)
+        self.bot = bot_instance if bot_instance is not None else switchbot.SwitchBot()
 
-    def __init__(self):
-        self.stream = self.p.open(format=self.FORMAT,
-                channels=self.CHANNELS,
-                rate=self.RATE,
-                input=True,
-                frames_per_buffer=self.CHUNK)
-        # デフォルトの入力デバイス情報を取得して表示
-        default_device_info = self.p.get_default_input_device_info()
+        # 入力ストリームの作成
+        self.stream = self.audio_interface.open(
+            format=self.format,
+            channels=self.channels,
+            rate=self.rate,
+            input=True,
+            frames_per_buffer=self.chunk
+        )
+        default_device_info = self.audio_interface.get_default_input_device_info()
         print("使用中のマイク:", default_device_info.get('name', '不明'))
 
-    def get_amplitude(self):
-        # マイクからデータ読み込み
-        data = self.stream.read(self.CHUNK, exception_on_overflow=False)
-        # numpy配列に変換
-        audio_data = np.frombuffer(data, dtype=np.int16)
-        # 平均絶対値を計算（単純な音量評価）
-        amplitude = np.abs(audio_data).mean()
-        return amplitude
-    
+        # シングルトリガー用の状態変数
+        self.single_next_exec_time = self.wait_time
+
+        # タームトリガー用の状態変数
+        self.term_next_exec_time = self.wait_time
+        self.term_log = []
+        self.over_threshold_log = []
+
+    def read_audio_data(self):
+        """マイクから読み込んだ生データをnumpy配列に変換して返す"""
+        data = self.stream.read(self.chunk, exception_on_overflow=False)
+        return np.frombuffer(data, dtype=np.int16)
+
     def calculate_rms(self):
-        # マイクからデータ読み込み
-        data = self.stream.read(self.CHUNK, exception_on_overflow=False)
-        # numpy配列に変換
-        audio_data = np.frombuffer(data, dtype=np.int16)
-        # 空データなら 0 を返す
+        """読み込んだデータからRMS値を計算する"""
+        audio_data = self.read_audio_data()
         if audio_data.size == 0:
             return 0.0
-
-        # 計算前に float にキャストしておく
         audio_data = audio_data.astype(np.float32)
-        squared = np.square(audio_data)          # 各サンプルを二乗
-        mean_squared = np.mean(squared)           # 二乗した値の平均を計算
-        rms_value = np.sqrt(mean_squared)         # 平均の平方根を取る
+        squared = np.square(audio_data)
+        mean_squared = np.mean(squared)
+        rms_value = np.sqrt(mean_squared)
+        return 0.0 if np.isnan(rms_value) else rms_value
 
-        # 万が一 NaN が出た場合は 0 を返す
-        if np.isnan(rms_value):
-            rms_value = 0.0
-
-        return rms_value
-    
     def add_log(self, amplitude):
-        str_log = self.log.add_log(amplitude)
-        if str_log != "":
-            print(str_log.rstrip('\n'))
+        """loggerに値を追加し、ログ文字列があれば出力する"""
+        log_str = self.logger.add_log(amplitude)
+        if log_str:
+            print(log_str.rstrip('\n'))
 
     def terminate_stream(self):
-        # ストリームとPyAudioを終了
+        """ストリームとオーディオインターフェースを終了する"""
         self.stream.stop_stream()
         self.stream.close()
-        self.p.terminate()
+        self.audio_interface.terminate()
 
     def play_wav(self, filename=None):
-        """指定したwavファイルを単発再生する"""
+        """指定したWAVファイルを再生する（単発再生）"""
         if filename is None:
-            filename = self.WAV_FILE
+            filename = self.wav_file
         try:
             wf = wave.open(filename, 'rb')
         except FileNotFoundError:
             print(f"WAVファイル {filename} が見つかりません。")
             return
-        # 出力用ストリームの作成
-        output_stream = self.p.open(
-            format=self.p.get_format_from_width(wf.getsampwidth()),
+
+        output_stream = self.audio_interface.open(
+            format=self.audio_interface.get_format_from_width(wf.getsampwidth()),
             channels=wf.getnchannels(),
             rate=wf.getframerate(),
-            output=True)
-        data = wf.readframes(self.CHUNK)
+            output=True
+        )
+        data = wf.readframes(self.chunk)
         while data:
             output_stream.write(data)
-            data = wf.readframes(self.CHUNK)
+            data = wf.readframes(self.chunk)
         output_stream.stop_stream()
         output_stream.close()
         wf.close()
 
+    # ----- シングルトリガー関連の処理 -----
 
-    def single_trigger(self):
-        next_exec_time = self.WAIT_TIME
+    def process_single_trigger(self, amplitude):
+        """
+        1回分のシングルトリガーの処理を行う。
+        - クールダウンタイムの更新
+        - 閾値を超えてクールダウンが終了していればシーンを実行
+        """
+        if self.single_next_exec_time > 0:
+            self.single_next_exec_time -= 1
+            if self.single_next_exec_time == 0:
+                print("READY")
+        if amplitude > self.threshold and self.single_next_exec_time == 0:
+            print("**************************************************OK")
+            self.bot.exec_scene()
+            self.single_next_exec_time = self.wait_time
+
+    def single_trigger_loop(self):
+        """無限ループでシングルトリガーの処理を実行する（Ctrl+Cで終了）"""
         try:
             while True:
                 amplitude = self.calculate_rms()
                 self.add_log(amplitude)
-                
-                if(next_exec_time > 0):
-                    next_exec_time -= 1
-                    if(next_exec_time == 0):
-                        print("READY")
-
-                if amplitude > self.THRESHOLD and next_exec_time == 0:
-                    print("**************************************************OK")
-                    self.bot.exec_scene()
-                    next_exec_time = self.WAIT_TIME
-                    self.play_wav()
+                self.process_single_trigger(amplitude)
         except KeyboardInterrupt:
             print("終了します...")
         finally:
             self.terminate_stream()
 
-    def term_trigger(self):
-        next_exec_time = self.WAIT_TIME
-        list_term_log = []
-        list_over_threshold = []
+    # ----- タームトリガー関連の処理 -----
+
+    def process_term_trigger(self, amplitude):
+        """
+        1回分のタームトリガーの処理を行う。
+        - クールダウンタイムの更新
+        - ログを蓄積し、一定数ごとに最大音量をチェック
+        - 連続して閾値を超えた場合、シーンを実行
+        """
+        if self.term_next_exec_time > 0:
+            self.term_next_exec_time -= 1
+            if self.term_next_exec_time == 0:
+                print("READY")
+        self.term_log.append(amplitude)
+        if len(self.term_log) >= self.log_timing:
+            max_amp = int(max(self.term_log))
+            if max_amp > self.threshold:
+                self.over_threshold_log.append(max_amp)
+            else:
+                self.over_threshold_log.clear()
+            if len(self.over_threshold_log) >= self.term_count and self.term_next_exec_time == 0:
+                print("**************************************************OK")
+                self.bot.exec_scene()
+                self.term_next_exec_time = self.wait_time
+            self.term_log.clear()
+
+    def term_trigger_loop(self):
+        """無限ループでタームトリガーの処理を実行する（Ctrl+Cで終了）"""
         try:
             while True:
                 amplitude = self.calculate_rms()
                 self.add_log(amplitude)
-
-                if(next_exec_time > 0):
-                    next_exec_time -= 1
-                    if(next_exec_time == 0):
-                        print("READY")
-
-                list_term_log.append(amplitude)
-
-                #list_term_logが一定数たまったら実行
-                if len(list_term_log) >= self.LOG_TIMING:
-                    max_amp = int(max(list_term_log))
-                    # max_ampがthresholdを超えたらlist_over_thresholdにためる
-                    if max_amp > self.THRESHOLD:
-                        list_over_threshold.append(max_amp)
-                    else:
-                        #もし超えない場合があったらlist_over_thresholdをリセット
-                        list_over_threshold.clear()
-                    
-                    #連続でmaxがthresholdを超えるかつReadyになっていたら実行
-                    if len(list_over_threshold) >= self.TERM_COUNT and next_exec_time == 0:
-                        print("**************************************************OK")
-                        self.bot.exec_scene()
-                        next_exec_time = self.WAIT_TIME
-                        self.play_wav()
-                    list_term_log.clear()
-
+                self.process_term_trigger(amplitude)
         except KeyboardInterrupt:
             print("終了します...")
         finally:

@@ -12,8 +12,8 @@ m = mic.Mic()
 arg = sys.argv[1].lower()
 
 if arg == "single":
-    m.single_trigger()
+    m.single_trigger_loop()
 elif arg == "term":
-    m.term_trigger()
+    m.term_trigger_loop()
 else:
     usage()
