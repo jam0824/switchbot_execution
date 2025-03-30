@@ -4,4 +4,23 @@ api_test.py
 __pycache__
 .pytest_cache
 .venv
+*.log
+
+## 開発者向け情報
+- テストはPyTestを使用しています
+- 依存性注入パターンを採用し、テスト容易性を確保
+- モジュール化された設計で、機能の追加や変更が容易
+
+## ライセンス
+MIT License
+
+## 貢献
+1. このリポジトリをフォーク
+2. 新しいブランチを作成 (`git checkout -b feature/amazing-feature`)
+3. 変更をコミット (`git commit -m 'Add some amazing feature'`)
+4. ブランチにプッシュ (`git push origin feature/amazing-feature`)
+5. プルリクエストを作成
+
+## 作者
+Your Name
 

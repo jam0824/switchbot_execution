@@ -1,4 +1,5 @@
 import datetime
+import os
 
 class Logger:
     list_log = []
@@ -6,10 +7,21 @@ class Logger:
     log_max = 100
     log_count = 100
 
-    def __init__(self, timing, file_name):
+    def __init__(self, timing):
         self.log_max = timing
         self.log_count = timing
-        self.file_name = file_name
+        
+        # logsフォルダが存在しない場合は作成
+        logs_folder = "logs"
+        if not os.path.exists(logs_folder):
+            os.makedirs(logs_folder)
+        
+        # 当日のファイル名を作成 (例: "logs/2025-03-31.log")
+        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        self.file_name = os.path.join(logs_folder, f"{current_date}.log")
+        
+        # 新しいログファイルを作成（既存の場合は上書き）
+        open(self.file_name, 'w').close()
 
     def calc_amplitude_averate(self, list_amp):
         total = sum(list_amp)
@@ -19,17 +31,16 @@ class Logger:
     def add_log(self, data):
         log = ""
         self.list_log.append(data)
-        # logが一定量たまったらファイルに平均化して追記
+        # ログが一定量たまったら、平均値と最大値を計算してログに追記
         if len(self.list_log) >= self.log_max:
             average = self.calc_amplitude_averate(self.list_log)
             max_data = int(max(self.list_log))
             current_time = datetime.datetime.now()
             formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
-            log = str(formatted_time) + ',' + str(average) + ',' + str(max_data) + '\n'
+            log = f"{formatted_time},{average},{max_data}\n"
             self.append_string_to_file(log, self.file_name)
             self.list_log.clear()
         return log
-
 
     def append_string_to_file(self, text, file_name):
         """
@@ -40,8 +51,3 @@ class Logger:
         """
         with open(file_name, 'a') as f:
             f.write(text)
-
-
-    
-
-    

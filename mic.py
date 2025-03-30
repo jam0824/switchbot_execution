@@ -26,7 +26,7 @@ class Mic:
 
         # 依存性注入（引数で渡されたオブジェクトがなければデフォルトを生成）
         self.audio_interface = audio_interface if audio_interface is not None else pyaudio.PyAudio()
-        self.logger = logger_instance if logger_instance is not None else logger.Logger(self.log_timing, self.output_file_name)
+        self.logger = logger_instance if logger_instance is not None else logger.Logger(self.log_timing)
         self.bot = bot_instance if bot_instance is not None else switchbot.SwitchBot()
 
         # 入力ストリームの作成
