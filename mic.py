@@ -4,6 +4,9 @@ import switchbot
 import logger
 import wave
 import config  # config.pyからパラメーターを読み込み
+from collections import deque
+from datetime import datetime
+import os
 
 class Mic:
     def __init__(
@@ -48,9 +51,19 @@ class Mic:
         self.term_log = []
         self.over_threshold_log = []
 
+        # 音声バッファ関連の設定
+        self.buffer_seconds = 3  # 保存する音声の長さ（秒）
+        self.audio_buffer = deque(maxlen=int(self.rate * self.buffer_seconds / self.chunk))
+        self.save_dir = "detected_sounds"  # 保存先ディレクトリ
+        
+        # 保存先ディレクトリの作成
+        os.makedirs(self.save_dir, exist_ok=True)
+
     def read_audio_data(self):
         """マイクから読み込んだ生データをnumpy配列に変換して返す"""
         data = self.stream.read(self.chunk, exception_on_overflow=False)
+        # バッファに生データを追加
+        self.audio_buffer.append(data)
         return np.frombuffer(data, dtype=np.int16)
 
     def calculate_rms(self):
@@ -76,29 +89,20 @@ class Mic:
         self.stream.close()
         self.audio_interface.terminate()
 
-    def play_wav(self, filename=None):
-        """指定したWAVファイルを再生する（単発再生）"""
-        if filename is None:
-            filename = self.wav_file
-        try:
-            wf = wave.open(filename, 'rb')
-        except FileNotFoundError:
-            print(f"WAVファイル {filename} が見つかりません。")
-            return
 
-        output_stream = self.audio_interface.open(
-            format=self.audio_interface.get_format_from_width(wf.getsampwidth()),
-            channels=wf.getnchannels(),
-            rate=wf.getframerate(),
-            output=True
-        )
-        data = wf.readframes(self.chunk)
-        while data:
-            output_stream.write(data)
-            data = wf.readframes(self.chunk)
-        output_stream.stop_stream()
-        output_stream.close()
-        wf.close()
+    def save_buffer_to_wav(self):
+        """現在のバッファの内容をWAVファイルとして保存"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = os.path.join(self.save_dir, f"detected_{timestamp}.wav")
+        
+        with wave.open(filename, 'wb') as wf:
+            wf.setnchannels(self.channels)
+            wf.setsampwidth(self.audio_interface.get_sample_size(self.format))
+            wf.setframerate(self.rate)
+            for data in self.audio_buffer:
+                wf.writeframes(data)
+        
+        print(f"検知音声を保存しました: {filename}")
 
     # ----- シングルトリガー関連の処理 -----
 
@@ -114,6 +118,7 @@ class Mic:
                 print("READY")
         if amplitude > self.threshold and self.single_next_exec_time == 0:
             print("**************************************************OK")
+            self.save_buffer_to_wav()  # 検知時に音声を保存
             self.bot.exec_scene()
             self.single_next_exec_time = self.wait_time
 
@@ -151,6 +156,7 @@ class Mic:
                 self.over_threshold_log.clear()
             if len(self.over_threshold_log) >= self.term_count and self.term_next_exec_time == 0:
                 print("**************************************************OK")
+                self.save_buffer_to_wav()  # 検知時に音声を保存
                 self.bot.exec_scene()
                 self.term_next_exec_time = self.wait_time
             self.term_log.clear()

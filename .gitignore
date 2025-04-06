@@ -5,6 +5,7 @@ __pycache__
 .pytest_cache
 .venv
 *.log
+*.wav
 
 ## 開発者向け情報
 - テストはPyTestを使用しています
